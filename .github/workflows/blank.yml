@@ -1,75 +1,62 @@
-name: Build FFmpeg 4.3.1 Static Libraries for Windows x64 and x86
+name: Build FFmpeg 4.3 for Windows x64
 
 on:
-  push:
-    branches:
-      - master
-  pull_request:
-    branches:
-      - master
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-latest
-    strategy:
-      matrix:
-        arch: [x64, x86]
-
     steps:
-    # Checkout FFmpeg repository at version 4.3.1
-    - name: Checkout FFmpeg
+    - name: Checkout (empty repo)
       uses: actions/checkout@v4
-      with:
-        repository: FFmpeg/FFmpeg
-        ref: n4.3.1
 
-    # Install MSYS2
     - name: Install MSYS2
       uses: msys2/setup-msys2@v2
       with:
-        msystem: ${{ matrix.arch == 'x64' && 'MINGW64' || 'MINGW32' }}
         update: true
-        install: mingw-w64-${{ matrix.arch }}-gcc mingw-w64-${{ matrix.arch }}-make
+        install: >-
+          git
+          unzip
+          make
+          yasm
+          pkg-config
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-pkg-config
 
-    # Install Visual Studio Build Tools
-    - name: Setup MSVC
-      uses: microsoft/setup-msbuild@v2
-      with:
-        msbuild-architecture: ${{ matrix.arch }}
-
-    # Configure FFmpeg for static libraries
-    - name: Configure FFmpeg
+    - name: Build FFmpeg 4.3
+      shell: msys2 {0}
       run: |
+        pacman -Sy --noconfirm
+        mkdir -p /c/build && cd /c/build
+        git clone --branch release/4.3 https://github.com/FFmpeg/FFmpeg ffmpeg
+        cd ffmpeg
         ./configure \
-          --arch=${{ matrix.arch }} \
+          --prefix=/c/build/ffmpeg_build \
           --toolchain=msvc \
+          --arch=x86_64 \
+          --target-os=win64 \
           --enable-static \
           --disable-shared \
-          --disable-programs \
+          --disable-debug \
           --disable-doc \
-          --enable-libavcodec \
-          --enable-libavutil \
-          --enable-libswresample \
-          --extra-cflags="-MT" \
-          --extra-ldflags="-LIBPATH:${{ env.MINGW_PREFIX }}/lib"
-      shell: msys2 {0}
-      env:
-        MINGW_PREFIX: ${{ matrix.arch == 'x64' && 'C:/msys64/mingw64' || 'C:/msys64/mingw32' }}
-
-    # Build FFmpeg
-    - name: Build FFmpeg
-      run: |
+          --disable-programs \
+          --disable-avdevice \
+          --disable-swscale \
+          --disable-postproc \
+          --enable-avcodec \
+          --enable-avutil \
+          --enable-swresample
         make -j$(nproc)
-      shell: msys2 {0}
+        make install
 
-    # Collect and upload artifacts
+    - name: Package Artifacts
+      shell: bash
+      run: |
+        cd /c/build/ffmpeg_build
+        zip -r ffmpeg-libs-x64-static.zip include lib
+
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: ffmpeg-4.3.1-${{ matrix.arch }}-release-static
-        path: |
-          libavcodec/libavcodec.lib
-          libavutil/libavutil.lib
-          libswresample/libswresample.lib
-        if-no-files-found: error
+        name: ffmpeg-4.3-static-x64
+        path: /c/build/ffmpeg_build/ffmpeg-libs-x64-static.zip
