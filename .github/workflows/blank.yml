@@ -1,71 +1,76 @@
-name: Build FFmpeg 4.3 Static for Windows x64 with .lib
+name: Build FFmpeg 4.3 Static Libs with MSVC
 
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2022
 
     steps:
-    - name: Checkout
+    - name: Checkout empty repo
       uses: actions/checkout@v4
 
-    - name: Install MSYS2 and Tools
-      uses: msys2/setup-msys2@v2
-      with:
-        update: true
-        install: >-
-          git
-          make
-          yasm
-          unzip
-          mingw-w64-x86_64-gcc
-          mingw-w64-x86_64-llvm
-          mingw-w64-x86_64-pkg-config
-
-    - name: Build FFmpeg 4.3 (native MinGW)
-      shell: msys2 {0}
+    - name: Install required tools
       run: |
-        cd /c
+        choco install nasm -y
+        choco install ninja -y
+
+    - name: Clone FFmpeg 4.3
+      run: |
         git clone --branch release/4.3 https://github.com/FFmpeg/FFmpeg.git ffmpeg
-        cd ffmpeg
-        ./configure \
-          --prefix=/c/ffmpeg_build \
-          --arch=x86_64 \
-          --target-os=mingw32 \
-          --enable-static \
-          --disable-shared \
-          --disable-debug \
-          --disable-programs \
-          --disable-doc \
-          --enable-avcodec \
-          --enable-avutil \
-          --enable-swresample
-        make -j$(nproc)
-        make install
 
-    - name: Convert .a to .lib (using llvm-dlltool)
-      shell: msys2 {0}
+    - name: Setup MSVC environment
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: x64
+
+    - name: Configure FFmpeg (MSVC x64)
+      working-directory: ./ffmpeg
+      shell: cmd
       run: |
-        cd /c/ffmpeg_build/lib
-        for lib in *.a; do
-          base=$(basename "$lib" .a)
-          llvm-dlltool -m i386:x86-64 -D dummy.dll -l "$base.lib" "$lib"
-        done
+        set PATH=C:\Program Files\NASM;%PATH%
+        call configure ^
+          --toolchain=msvc ^
+          --arch=x86_64 ^
+          --target-os=win64 ^
+          --enable-static ^
+          --disable-shared ^
+          --disable-programs ^
+          --disable-doc ^
+          --disable-debug ^
+          --disable-everything ^
+          --enable-avcodec ^
+          --enable-avutil ^
+          --enable-swresample ^
+          --extra-cflags="/MT" ^
+          --extra-ldflags="/NODEFAULTLIB:library"
 
-    - name: Package .lib and includes
+    - name: Build FFmpeg static libs
+      working-directory: ./ffmpeg
+      shell: cmd
+      run: |
+        nmake
+
+    - name: Collect headers and libs
       shell: bash
       run: |
-        cd /c/ffmpeg_build
-        mkdir package
-        cp -r include package/
-        mkdir package/lib
-        cp lib/*.lib package/lib/
-        zip -r ffmpeg-static-x64-4.3-lib.zip package
+        mkdir -p package/lib package/include
+        cp ffmpeg/libavcodec/avcodec.lib package/lib/
+        cp ffmpeg/libavutil/avutil.lib package/lib/
+        cp ffmpeg/libswresample/swresample.lib package/lib/
+        cp -r ffmpeg/libavcodec/*.h package/include/
+        cp -r ffmpeg/libavutil/*.h package/include/
+        cp -r ffmpeg/libswresample/*.h package/include/
+
+    - name: Zip output
+      shell: bash
+      run: |
+        cd package
+        zip -r ffmpeg-4.3-msvc-static-x64.zip .
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: ffmpeg-static-x64-4.3-lib
-        path: /c/ffmpeg_build/ffmpeg-static-x64-4.3-lib.zip
+        name: ffmpeg-4.3-msvc-static-x64
+        path: package/ffmpeg-4.3-msvc-static-x64.zip
