@@ -1,4 +1,3 @@
-# .github/workflows/build-zlib.yml
 name: Build zlib Static Libraries
 
 on:
@@ -17,30 +16,26 @@ jobs:
         arch: [x86, x64]
 
     steps:
-    - name: Checkout zlib
-      uses: actions/checkout@v3
+    - name: Checkout zlib source
+      uses: actions/checkout@v4
       with:
         repository: madler/zlib
         ref: ${{ github.event.inputs.version }}
 
-    - name: Setup MSVC environment
-      uses: microsoft/setup-msvc@v1
-      with:
-        vs-version: 'latest'
-        arch: ${{ matrix.arch }}
+    - name: Setup CMake
+      uses: lukka/get-cmake@latest
 
-    - name: Configure (CMake)
+    - name: Configure CMake
       run: |
         mkdir build
         cd build
-        cmake .. -A ${{ matrix.arch }} -DCMAKE_BUILD_TYPE=Release -DZLIB_STATIC=ON
+        cmake .. -A ${{ matrix.arch }} -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF
 
     - name: Build
-      working-directory: build
-      run: cmake --build . --config Release
+      run: cmake --build build --config Release
 
     - name: Upload artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: zlib-${{ matrix.arch }}-release
-        path: build/*.lib
+        path: build/Release/*.lib
