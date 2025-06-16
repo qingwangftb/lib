@@ -1,46 +1,75 @@
-name: Build HP-Socket Static x64 with SSL (v6.0.4)
+name: Build FFmpeg 4.3.1 Static Libraries for Windows x64 and x86
 
 on:
-  workflow_dispatch:
   push:
-    tags:
-      - 'v6.0.4'
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-latest
-
-    env:
-      CONFIGURATION: Release
-      PLATFORM: x64
-      HP_SOCKET_VERSION: v6.0.4
+    strategy:
+      matrix:
+        arch: [x64, x86]
 
     steps:
-    - name: Clone HP-Socket v6.0.4 source
-      run: |
-        git clone --branch ${{ env.HP_SOCKET_VERSION }} https://github.com/ldcsaa/HP-Socket.git
+    # Checkout FFmpeg repository at version 4.3.1
+    - name: Checkout FFmpeg
+      uses: actions/checkout@v4
+      with:
+        repository: FFmpeg/FFmpeg
+        ref: n4.3.1
 
-    - name: Install OpenSSL (v1.1.1)
-      run: |
-        choco install openssl --version=1.1.1.2100 -y
-        echo "INCLUDE=C:\Program Files\OpenSSL-Win64\include" >> $env:GITHUB_ENV
-        echo "LIB=C:\Program Files\OpenSSL-Win64\lib" >> $env:GITHUB_ENV
+    # Install MSYS2
+    - name: Install MSYS2
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: ${{ matrix.arch == 'x64' && 'MINGW64' || 'MINGW32' }}
+        update: true
+        install: mingw-w64-${{ matrix.arch }}-gcc mingw-w64-${{ matrix.arch }}-make
 
-    - name: Set up MSBuild
+    # Install Visual Studio Build Tools
+    - name: Setup MSVC
       uses: microsoft/setup-msbuild@v2
+      with:
+        msbuild-architecture: ${{ matrix.arch }}
 
-    - name: Build HP-Socket static lib from correct .sln
+    # Configure FFmpeg for static libraries
+    - name: Configure FFmpeg
       run: |
-        cd HP-Socket
-        msbuild Windows\Project\HPSocket-2022.sln `
-          /p:Configuration=${{ env.CONFIGURATION }} `
-          /p:Platform=${{ env.PLATFORM }} `
-          /p:SSL_SUPPORT=true `
-          /t:HPSocket_Static
+        ./configure \
+          --arch=${{ matrix.arch }} \
+          --toolchain=msvc \
+          --enable-static \
+          --disable-shared \
+          --disable-programs \
+          --disable-doc \
+          --enable-libavcodec \
+          --enable-libavutil \
+          --enable-libswresample \
+          --extra-cflags="-MT" \
+          --extra-ldflags="-LIBPATH:${{ env.MINGW_PREFIX }}/lib"
+      shell: msys2 {0}
+      env:
+        MINGW_PREFIX: ${{ matrix.arch == 'x64' && 'C:/msys64/mingw64' || 'C:/msys64/mingw32' }}
 
+    # Build FFmpeg
+    - name: Build FFmpeg
+      run: |
+        make -j$(nproc)
+      shell: msys2 {0}
+
+    # Collect and upload artifacts
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: hp-socket-v6.0.4-static-x64-release
+        name: ffmpeg-4.3.1-${{ matrix.arch }}-release-static
         path: |
-          HP-Socket/bin/x64/Release/*.lib
+          libavcodec/libavcodec.lib
+          libavutil/libavutil.lib
+          libswresample/libswresample.lib
+        if-no-files-found: error
