@@ -32,7 +32,7 @@ jobs:
     - name: Build HP-Socket static lib
       run: |
         cd HP-Socket
-        msbuild builds\vs2022\hpsocket-static.sln `
+        msbuild builds\vs2019\hpsocket-static.sln `
           /p:Configuration=${{ env.CONFIGURATION }} `
           /p:Platform=${{ env.PLATFORM }} `
           /p:SSL_SUPPORT=true
