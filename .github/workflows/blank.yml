@@ -29,13 +29,14 @@ jobs:
     - name: Set up MSBuild
       uses: microsoft/setup-msbuild@v2
 
-    - name: Build HP-Socket static lib
+    - name: Build HP-Socket static lib from correct .sln
       run: |
         cd HP-Socket
-        msbuild builds\vs2019\hpsocket-static.sln `
+        msbuild Windows\Project\HPSocket-2022.sln `
           /p:Configuration=${{ env.CONFIGURATION }} `
           /p:Platform=${{ env.PLATFORM }} `
-          /p:SSL_SUPPORT=true
+          /p:SSL_SUPPORT=true `
+          /t:HPSocket_Static
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
