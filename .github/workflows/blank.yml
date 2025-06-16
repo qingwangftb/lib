@@ -1,43 +1,78 @@
-name: Build HP-Socket x64 Static Library with SSL
+name: Build HP-Socket v6.0.3.1 x64 Release Static Library with SSL
 
 on:
-  workflow_dispatch:
   push:
-    branches: [ main ]
+    branches:
+      - master
   pull_request:
-    branches: [ main ]
+    branches:
+      - master
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout your project
-        uses: actions/checkout@v3
+    # Checkout HP-Socket repository at specific version v6.0.3.1
+    - name: Checkout HP-Socket
+      uses: actions/checkout@v4
+      with:
+        repository: ldcsaa/HP-Socket
+        ref: v6.0.3.1
 
-      - name: Clone HP-Socket source
-        run: |
-          git clone --depth=1 --branch=master https://github.com/ldcsaa/HP-Socket.git
+    # Install Visual Studio Build Tools (includes MSVC)
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@v2
+      with:
+        msbuild-architecture: x64
 
-      - name: Install vcpkg and OpenSSL x64
-        shell: pwsh
-        run: |
-          git clone https://github.com/microsoft/vcpkg.git
-          ./vcpkg/bootstrap-vcpkg.bat
-          ./vcpkg/vcpkg install openssl:x64-windows
+    # Install CMake for OpenSSL build (if needed) and configuration
+    - name: Install CMake
+      uses: lukka/get-cmake@v3
+      with:
+        cmakeVersion: 'latest'
 
-      - name: Configure CMake (x64 static + ssl)
-        run: >
-          cmake -S HP-Socket -B build_x64 -A x64
-          -DHPSSL_SUPPORT=ON
-          -DHP_STATIC=ON
-          -DCMAKE_TOOLCHAIN_FILE=./vcpkg/scripts/buildsystems/vcpkg.cmake
+    # Download and extract prebuilt OpenSSL for Windows x64
+    - name: Download OpenSSL
+      run: |
+        Invoke-WebRequest -Uri https://slproweb.com/download/Win64OpenSSL-1_1_1w.exe -OutFile Win64OpenSSL.exe
+        Start-Process -FilePath Win64OpenSSL.exe -ArgumentList "/silent /verysilent /dir=C:\OpenSSL-Win64" -Wait
+      shell: powershell
 
-      - name: Build Release (x64)
-        run: cmake --build build_x64 --config Release --verbose
+    # Set up environment variables for OpenSSL
+    - name: Set OpenSSL Environment
+      run: |
+        echo "OPENSSL_DIR=C:\OpenSSL-Win64" >> $env:GITHUB_ENV
+        echo "OPENSSL_LIB_DIR=C:\OpenSSL-Win64\lib" >> $env:GITHUB_ENV
+        echo "OPENSSL_INCLUDE_DIR=C:\OpenSSL-Win64\include" >> $env:GITHUB_ENV
+      shell: powershell
 
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: HP-Socket-x64-Release
-          path: build_x64/Release/*.lib
+    # Configure HP-Socket solution for static library with SSL
+    - name: Configure HP-Socket
+      run: |
+        mkdir build
+        cd build
+        cmake .. -A x64 `
+          -DHP_Socket_WITH_SSL=ON `
+          -DOPENSSL_ROOT_DIR="${{ env.OPENSSL_DIR }}" `
+          -DOPENSSL_LIBRARIES="${{ env.OPENSSL_LIB_DIR }}" `
+          -DOPENSSL_INCLUDE_DIR="${{ env.OPENSSL_INCLUDE_DIR }}" `
+          -DCMAKE_BUILD_TYPE=Release
+      shell: cmd
+
+    # Build HP-Socket static library (HPSocket4C-Static)
+    - name: Build HP-Socket Static Library
+      run: |
+        cd build
+        msbuild HPSocket.sln /p:Configuration=Release /p:Platform=x64 /t:HPSocket4C-Static
+      shell: cmd
+
+    # Collect and upload the static library as an artifact
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: HPSocket-v6.0.3.1-x64-Release-Static-SSL
+        path: |
+          build/Release/HPSocket4C-Static.lib
+        if-no-files-found: error
