@@ -1,11 +1,11 @@
 name: Build HP-Socket Static Library with SSL
 
 on:
+  workflow_dispatch:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch:
 
 jobs:
   build:
@@ -15,30 +15,30 @@ jobs:
       matrix:
         arch: [Win32, x64]
 
-    env:
-      OPENSSL_ROOT_DIR: C:\Program Files\OpenSSL-Win64
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
       - name: Install vcpkg and OpenSSL
+        shell: pwsh
         run: |
           git clone https://github.com/microsoft/vcpkg.git
-          .\vcpkg\bootstrap-vcpkg.bat
-          .\vcpkg\vcpkg install openssl:x64-windows
-          .\vcpkg\vcpkg install openssl:x86-windows
+          ./vcpkg/bootstrap-vcpkg.bat
+          if ("${{ matrix.arch }}" -eq "x64") {
+            ./vcpkg/vcpkg install openssl:x64-windows
+          } else {
+            ./vcpkg/vcpkg install openssl:x86-windows
+          }
 
       - name: Configure CMake
         run: >
           cmake -B build_${{ matrix.arch }} -A ${{ matrix.arch }}
           -DHPSSL_SUPPORT=ON
           -DHP_STATIC=ON
-          -DOPENSSL_ROOT_DIR="${{ env.OPENSSL_ROOT_DIR }}"
-          -DCMAKE_TOOLCHAIN_FILE=.\vcpkg\scripts\buildsystems\vcpkg.cmake
+          -DCMAKE_TOOLCHAIN_FILE=./vcpkg/scripts/buildsystems/vcpkg.cmake
 
       - name: Build Release
-        run: cmake --build build_${{ matrix.arch }} --config Release
+        run: cmake --build build_${{ matrix.arch }} --config Release --verbose
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
