@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'zlib version to build'
+        description: 'zlib version tag (e.g. v1.3.1)'
         required: true
         default: 'v1.3.1'
 
@@ -13,19 +13,16 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        arch: [x86, x64]
+        arch: [x64, Win32]
 
     steps:
-    - name: Checkout zlib source
+    - name: Checkout zlib
       uses: actions/checkout@v4
       with:
         repository: madler/zlib
         ref: ${{ github.event.inputs.version }}
 
-    - name: Setup CMake
-      uses: lukka/get-cmake@latest
-
-    - name: Configure CMake
+    - name: Configure
       run: |
         mkdir build
         cd build
@@ -34,8 +31,8 @@ jobs:
     - name: Build
       run: cmake --build build --config Release
 
-    - name: Upload artifact
+    - name: Upload static library
       uses: actions/upload-artifact@v4
       with:
-        name: zlib-${{ matrix.arch }}-release
+        name: zlib-${{ matrix.arch }}-Release
         path: build/Release/*.lib
