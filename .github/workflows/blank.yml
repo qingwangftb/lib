@@ -27,11 +27,11 @@ jobs:
       with:
         msbuild-architecture: x64
 
-    # Install CMake for OpenSSL build (if needed) and configuration
+    # Install CMake using the latest version of lukka/get-cmake
     - name: Install CMake
-      uses: lukka/get-cmake@v3
+      uses: lukka/get-cmake@latest
       with:
-        cmakeVersion: 'latest'
+        cmakeVersion: '3.30.5' # Specify a stable CMake version
 
     # Download and extract prebuilt OpenSSL for Windows x64
     - name: Download OpenSSL
