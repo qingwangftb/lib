@@ -37,11 +37,11 @@ jobs:
         arch: x64
 
     - name: Configure and Build FFmpeg with MSVC
-	  shell: msys2 {0}
-      working-directory: ${{ github.workspace }}/ffmpeg
-	  run: |
-		export CC=cl
-		export CXX=cl
+      shell: msys2 {0}
+	  working-directory: ${{ github.workspace }}/ffmpeg
+      run: |
+        export CC=cl
+        export CXX=cl
         export NM=llvm-nm
         ./configure \
           --toolchain=msvc \
