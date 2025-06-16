@@ -21,10 +21,10 @@ jobs:
           yasm
           unzip
           mingw-w64-x86_64-gcc
-          mingw-w64-x86_64-pkg-config
           mingw-w64-x86_64-llvm
+          mingw-w64-x86_64-pkg-config
 
-    - name: Build FFmpeg 4.3
+    - name: Build FFmpeg 4.3 (native MinGW)
       shell: msys2 {0}
       run: |
         cd /c
@@ -32,7 +32,6 @@ jobs:
         cd ffmpeg
         ./configure \
           --prefix=/c/ffmpeg_build \
-          --toolchain=mingw64 \
           --arch=x86_64 \
           --target-os=mingw32 \
           --enable-static \
