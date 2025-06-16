@@ -1,0 +1,82 @@
+name: Build FFmpeg 4.3 Static Libs with MSVC + MSYS2
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup MSYS2
+      uses: msys2/setup-msys2@v2
+      with:
+        update: true
+        install: >-
+          git
+          make
+          yasm
+          nasm
+          perl
+          mingw-w64-x86_64-toolchain
+
+    - name: Install MSVC and ninja
+      run: |
+        choco install ninja -y
+
+    - name: Clone FFmpeg 4.3
+      run: |
+        git clone --branch release/4.3 https://github.com/FFmpeg/FFmpeg.git ffmpeg
+
+    - name: Setup MSVC environment
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: x64
+
+    - name: Configure and Build FFmpeg with MSVC
+      shell: msys2 {0}
+      working-directory: ${{ github.workspace }}/ffmpeg
+      run: |
+        export CC=cl
+        export CXX=cl
+        export NM=llvm-nm
+        ./configure \
+          --toolchain=msvc \
+          --arch=x86_64 \
+          --target-os=win64 \
+          --enable-static \
+          --disable-shared \
+          --disable-debug \
+          --disable-programs \
+          --disable-doc \
+          --disable-everything \
+          --enable-avcodec \
+          --enable-avutil \
+          --enable-swresample \
+          --extra-cflags="-MT"
+        make -j$(nproc)
+    - name: Collect headers and libs
+      shell: bash
+      run: |
+        mkdir -p package/lib package/include
+        cp ffmpeg/libavcodec/avcodec.lib package/lib/
+        cp ffmpeg/libavutil/avutil.lib package/lib/
+        cp ffmpeg/libswresample/swresample.lib package/lib/
+        cp -r ffmpeg/libavcodec/*.h package/include/
+        cp -r ffmpeg/libavutil/*.h package/include/
+        cp -r ffmpeg/libswresample/*.h package/include/
+
+    - name: Zip package
+      shell: bash
+      run: |
+        cd package
+        zip -r ffmpeg-4.3-msvc-static-x64.zip .
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ffmpeg-4.3-msvc-static-x64
+        path: package/ffmpeg-4.3-msvc-static-x64.zip
