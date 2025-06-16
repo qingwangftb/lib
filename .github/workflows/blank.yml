@@ -1,4 +1,4 @@
-name: Build FFmpeg 4.3 Static Libs with MSVC
+name: Build FFmpeg 4.3 Static Libs with MSVC + MSYS2
 
 on:
   workflow_dispatch:
@@ -8,12 +8,23 @@ jobs:
     runs-on: windows-2022
 
     steps:
-    - name: Checkout empty repo
+    - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Install required tools
+    - name: Setup MSYS2
+      uses: msys2/setup-msys2@v2
+      with:
+        update: true
+        install: >-
+          git
+          make
+          yasm
+          nasm
+          perl
+          mingw-w64-x86_64-toolchain
+
+    - name: Install MSVC and ninja
       run: |
-        choco install nasm -y
         choco install ninja -y
 
     - name: Clone FFmpeg 4.3
@@ -25,32 +36,28 @@ jobs:
       with:
         arch: x64
 
-    - name: Configure FFmpeg (MSVC x64)
-      working-directory: ./ffmpeg
-      shell: cmd
+    - name: Configure and Build FFmpeg with MSVC
+      shell: msys2 {0}
       run: |
-        set PATH=C:\Program Files\NASM;%PATH%
-        call configure ^
-          --toolchain=msvc ^
-          --arch=x86_64 ^
-          --target-os=win64 ^
-          --enable-static ^
-          --disable-shared ^
-          --disable-programs ^
-          --disable-doc ^
-          --disable-debug ^
-          --disable-everything ^
-          --enable-avcodec ^
-          --enable-avutil ^
-          --enable-swresample ^
-          --extra-cflags="/MT" ^
-          --extra-ldflags="/NODEFAULTLIB:library"
-
-    - name: Build FFmpeg static libs
-      working-directory: ./ffmpeg
-      shell: cmd
-      run: |
-        nmake
+        cd /c/ffmpeg
+        export CC=cl
+        export CXX=cl
+        export NM=llvm-nm
+        ./configure \
+          --toolchain=msvc \
+          --arch=x86_64 \
+          --target-os=win64 \
+          --enable-static \
+          --disable-shared \
+          --disable-debug \
+          --disable-programs \
+          --disable-doc \
+          --disable-everything \
+          --enable-avcodec \
+          --enable-avutil \
+          --enable-swresample \
+          --extra-cflags="-MT"
+        make -j$(nproc)
 
     - name: Collect headers and libs
       shell: bash
@@ -63,13 +70,13 @@ jobs:
         cp -r ffmpeg/libavutil/*.h package/include/
         cp -r ffmpeg/libswresample/*.h package/include/
 
-    - name: Zip output
+    - name: Zip package
       shell: bash
       run: |
         cd package
         zip -r ffmpeg-4.3-msvc-static-x64.zip .
 
-    - name: Upload Artifacts
+    - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: ffmpeg-4.3-msvc-static-x64
