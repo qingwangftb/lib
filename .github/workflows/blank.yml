@@ -1,4 +1,4 @@
-name: Build FFmpeg 4.3 for Windows x64
+name: Build FFmpeg 4.3 Static for Windows x64 with .lib
 
 on:
   workflow_dispatch:
@@ -6,57 +6,67 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+
     steps:
-    - name: Checkout (empty repo)
+    - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Install MSYS2
+    - name: Install MSYS2 and Tools
       uses: msys2/setup-msys2@v2
       with:
         update: true
         install: >-
           git
-          unzip
           make
           yasm
-          pkg-config
+          unzip
           mingw-w64-x86_64-gcc
           mingw-w64-x86_64-pkg-config
+          mingw-w64-x86_64-llvm
 
     - name: Build FFmpeg 4.3
       shell: msys2 {0}
       run: |
-        pacman -Sy --noconfirm
-        mkdir -p /c/build && cd /c/build
-        git clone --branch release/4.3 https://github.com/FFmpeg/FFmpeg ffmpeg
+        cd /c
+        git clone --branch release/4.3 https://github.com/FFmpeg/FFmpeg.git ffmpeg
         cd ffmpeg
         ./configure \
-          --prefix=/c/build/ffmpeg_build \
-          --toolchain=msvc \
+          --prefix=/c/ffmpeg_build \
+          --toolchain=mingw64 \
           --arch=x86_64 \
-          --target-os=win64 \
+          --target-os=mingw32 \
           --enable-static \
           --disable-shared \
           --disable-debug \
-          --disable-doc \
           --disable-programs \
-          --disable-avdevice \
-          --disable-swscale \
-          --disable-postproc \
+          --disable-doc \
           --enable-avcodec \
           --enable-avutil \
           --enable-swresample
         make -j$(nproc)
         make install
 
-    - name: Package Artifacts
+    - name: Convert .a to .lib (using llvm-dlltool)
+      shell: msys2 {0}
+      run: |
+        cd /c/ffmpeg_build/lib
+        for lib in *.a; do
+          base=$(basename "$lib" .a)
+          llvm-dlltool -m i386:x86-64 -D dummy.dll -l "$base.lib" "$lib"
+        done
+
+    - name: Package .lib and includes
       shell: bash
       run: |
-        cd /c/build/ffmpeg_build
-        zip -r ffmpeg-libs-x64-static.zip include lib
+        cd /c/ffmpeg_build
+        mkdir package
+        cp -r include package/
+        mkdir package/lib
+        cp lib/*.lib package/lib/
+        zip -r ffmpeg-static-x64-4.3-lib.zip package
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: ffmpeg-4.3-static-x64
-        path: /c/build/ffmpeg_build/ffmpeg-libs-x64-static.zip
+        name: ffmpeg-static-x64-4.3-lib
+        path: /c/ffmpeg_build/ffmpeg-static-x64-4.3-lib.zip
