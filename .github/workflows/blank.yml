@@ -1,10 +1,10 @@
-name: Build HP-Socket Static x64 with SSL
+name: Build HP-Socket Static x64 with SSL (v6.0.4)
 
 on:
   workflow_dispatch:
   push:
     tags:
-      - 'v6.*'
+      - 'v6.0.4'
 
 jobs:
   build:
@@ -13,16 +13,14 @@ jobs:
     env:
       CONFIGURATION: Release
       PLATFORM: x64
-      HP_SOCKET_VERSION: v6.6.0
+      HP_SOCKET_VERSION: v6.0.4
 
     steps:
-    - name: Clone HP-Socket source
+    - name: Clone HP-Socket v6.0.4 source
       run: |
-        git clone --branch %HP_SOCKET_VERSION% https://github.com/ldcsaa/HP-Socket.git
-        cd HP-Socket
-        echo "HP_SOCKET_DIR=$PWD/HP-Socket" >> $env:GITHUB_ENV
+        git clone --branch ${{ env.HP_SOCKET_VERSION }} https://github.com/ldcsaa/HP-Socket.git
 
-    - name: Install OpenSSL (1.1.1)
+    - name: Install OpenSSL (v1.1.1)
       run: |
         choco install openssl --version=1.1.1.2100 -y
         echo "INCLUDE=C:\Program Files\OpenSSL-Win64\include" >> $env:GITHUB_ENV
@@ -35,12 +33,13 @@ jobs:
       run: |
         cd HP-Socket
         msbuild builds\vs2022\hpsocket-static.sln `
-          /p:Configuration=Release `
-          /p:Platform=x64 `
+          /p:Configuration=${{ env.CONFIGURATION }} `
+          /p:Platform=${{ env.PLATFORM }} `
           /p:SSL_SUPPORT=true
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: hp-socket-static-x64-release
-        path: HP-Socket/bin/x64/Release/*.lib
+        name: hp-socket-v6.0.4-static-x64-release
+        path: |
+          HP-Socket/bin/x64/Release/*.lib
