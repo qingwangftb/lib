@@ -1,10 +1,10 @@
 name: Build HP-Socket Static x64 with SSL
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - 'v6.*'
-  workflow_dispatch:
 
 jobs:
   build:
@@ -13,12 +13,16 @@ jobs:
     env:
       CONFIGURATION: Release
       PLATFORM: x64
+      HP_SOCKET_VERSION: v6.6.0
 
     steps:
-    - name: Checkout HP-Socket source
-      uses: actions/checkout@v3
+    - name: Clone HP-Socket source
+      run: |
+        git clone --branch %HP_SOCKET_VERSION% https://github.com/ldcsaa/HP-Socket.git
+        cd HP-Socket
+        echo "HP_SOCKET_DIR=$PWD/HP-Socket" >> $env:GITHUB_ENV
 
-    - name: Install OpenSSL prebuilt (v1.1.1 or v3.x)
+    - name: Install OpenSSL (1.1.1)
       run: |
         choco install openssl --version=1.1.1.2100 -y
         echo "INCLUDE=C:\Program Files\OpenSSL-Win64\include" >> $env:GITHUB_ENV
@@ -27,31 +31,16 @@ jobs:
     - name: Set up MSBuild
       uses: microsoft/setup-msbuild@v2
 
-    - name: Build static lib (x64 Release)
+    - name: Build HP-Socket static lib
       run: |
+        cd HP-Socket
         msbuild builds\vs2022\hpsocket-static.sln `
           /p:Configuration=Release `
           /p:Platform=x64 `
           /p:SSL_SUPPORT=true
 
-    - name: Archive Release Artifacts
+    - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
         name: hp-socket-static-x64-release
-        path: |
-          bin/x64/Release/*.lib
-          bin/x64/Release/*.pdb
-          bin/x64/Release/*.dll
-          bin/x64/Release/*.exe
-
-    - name: (Optional) Publish Release
-      if: startsWith(github.ref, 'refs/tags/')
-      uses: softprops/action-gh-release@v2
-      with:
-        files: |
-          bin/x64/Release/*.lib
-          bin/x64/Release/*.pdb
-          bin/x64/Release/*.dll
-          bin/x64/Release/*.exe
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        path: HP-Socket/bin/x64/Release/*.lib
