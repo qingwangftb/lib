@@ -1,0 +1,46 @@
+# .github/workflows/build-zlib.yml
+name: Build zlib Static Libraries
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'zlib version to build'
+        required: true
+        default: 'v1.3.1'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        arch: [x86, x64]
+
+    steps:
+    - name: Checkout zlib
+      uses: actions/checkout@v3
+      with:
+        repository: madler/zlib
+        ref: ${{ github.event.inputs.version }}
+
+    - name: Setup MSVC environment
+      uses: microsoft/setup-msvc@v1
+      with:
+        vs-version: 'latest'
+        arch: ${{ matrix.arch }}
+
+    - name: Configure (CMake)
+      run: |
+        mkdir build
+        cd build
+        cmake .. -A ${{ matrix.arch }} -DCMAKE_BUILD_TYPE=Release -DZLIB_STATIC=ON
+
+    - name: Build
+      working-directory: build
+      run: cmake --build . --config Release
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: zlib-${{ matrix.arch }}-release
+        path: build/*.lib
